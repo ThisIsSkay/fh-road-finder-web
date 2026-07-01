@@ -1,0 +1,38 @@
+name: Deploy Pages with branch previews
+
+on:
+  push:
+    branches:
+      - '**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve destination directory
+        id: dest
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "dir=." >> "$GITHUB_OUTPUT"
+          else
+            echo "dir=preview/${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .
+          destination_dir: ${{ steps.dest.outputs.dir }}
+          keep_files: true
+          exclude_assets: '.github'
