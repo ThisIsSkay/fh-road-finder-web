@@ -43,14 +43,17 @@ var zoomSpan=document.getElementById("zoom-level");
 
 // State
 var srcData=null, rawMask=null, dilatedMask=null;
+var maskCanvas=document.createElement("canvas");
+var maskCtx=maskCanvas.getContext("2d");
 var imgW=0, imgH=0;
 var zoomScale=1, panX=0, panY=0;
 var isPanning=false, psx=0, psy=0, ppx=0, ppy=0;
-var scanTimer=null;
+var scanTimer=null, renderTimer=null;
 var cycleTimer=null, cycleFrame=0;
 var CYCLE_COLOURS=[[255,0,0],[255,255,0],[0,255,255],[255,0,255],[0,255,0],[255,165,0]];
 
 function fmt(n){return n.toLocaleString();}
+function esc(t){return String(t).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
 function hex2rgb(h){return[parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16)];}
 function rgb2hex(r,g,b){return"#"+[r,g,b].map(function(c){return c.toString(16).padStart(2,"0");}).join("");}
 
@@ -69,9 +72,12 @@ function getSettings(){
 }
 
 // === Settings UI ===
-tolSlider.addEventListener("input",function(){
-  var v=parseInt(this.value,10), n=TOL_NAMES[v];
+function updateTolLabel(){
+  var v=parseInt(tolSlider.value,10), n=TOL_NAMES[v];
   tolValue.textContent=n?v+" ("+n+")":String(v);
+}
+tolSlider.addEventListener("input",function(){
+  updateTolLabel();
   scheduleScan();
 });
 thickSlider.addEventListener("input",function(){
@@ -140,12 +146,20 @@ function loadImageFile(file){
       srcData=sourceCtx.getImageData(0,0,imgW,imgH);
       var mb=(file.size/1048576).toFixed(1);
       var isJ=/\.(jpe?g)$/i.test(file.name)||file.type==="image/jpeg";
-      var info=file.name+" &mdash; "+imgW+" x "+imgH+" &mdash; "+mb+" MB";
-      if(isJ) info+='<br><span class="warn">JPEG detected. Tolerance 5+ recommended.</span>';
+      var info=esc(file.name)+" &mdash; "+imgW+" x "+imgH+" &mdash; "+mb+" MB";
+      if(isJ){
+        if(parseInt(tolSlider.value,10)<5){
+          tolSlider.value=5; updateTolLabel();
+          info+='<br><span class="warn">JPEG detected. Tolerance set to 5 automatically.</span>';
+        }else{
+          info+='<br><span class="warn">JPEG detected. Tolerance 5+ recommended.</span>';
+        }
+      }
       if(imgW*imgH>20000000) info+='<br><span class="warn">Large image. May take a moment.</span>';
       showInfo(info,false);
       viewerLayout.classList.remove("hidden");
       runScan();
+      zoomFit();
     };
     img.src=ev.target.result;
   };
@@ -169,12 +183,13 @@ fileInput.addEventListener("change",function(){if(this.files.length>0)loadImageF
 function scheduleScan(){
   if(!srcData) return;
   clearTimeout(scanTimer);
+  clearTimeout(renderTimer);
   scanTimer=setTimeout(runScan,80);
 }
 function scheduleRender(){
   if(!rawMask) return;
-  clearTimeout(scanTimer);
-  scanTimer=setTimeout(function(){dilateAndRender();},30);
+  clearTimeout(renderTimer);
+  renderTimer=setTimeout(function(){dilateAndRender();},30);
 }
 function startColourCycle(){
   stopColourCycle();
@@ -192,7 +207,7 @@ function stopColourCycle(){
 }
 function renderCycleFrame(){
   if(!dilatedMask) return;
-  renderOutput(dilatedMask,getSettings());
+  renderOutput(getSettings());
   applyZoom();
 }
 document.addEventListener("visibilitychange",function(){
@@ -272,30 +287,41 @@ function dilateMask(mask,w,h,radius){
 function dilateAndRender(){
   var s=getSettings();
   dilatedMask=dilateMask(rawMask,imgW,imgH,s.thickness);
-  renderOutput(dilatedMask,s);
+  buildMaskCanvas(dilatedMask);
+  renderOutput(s);
   applyZoom();
 }
 
 // === Render output ===
-function renderOutput(mask,s){
-  outCanvas.width=imgW; outCanvas.height=imgH;
-  var imgd=outCtx.createImageData(imgW,imgH);
-  var d=imgd.data, src=srcData.data, total=imgW*imgH;
-  var hR=s.hR,hG=s.hG,hB=s.hB,m=s.mode;
-  for(var i=0;i<total;i++){
-    var o=i*4;
-    if(m==="overlay"){
-      if(mask[i]){d[o]=hR;d[o+1]=hG;d[o+2]=hB;}
-      else{d[o]=src[o];d[o+1]=src[o+1];d[o+2]=src[o+2];}
-      d[o+3]=255;
-    }else if(m==="black"){
-      if(mask[i]){d[o]=hR;d[o+1]=hG;d[o+2]=hB;}
-      d[o+3]=255;
-    }else{
-      if(mask[i]){d[o]=hR;d[o+1]=hG;d[o+2]=hB;d[o+3]=255;}
-    }
+// The dilated mask is baked into an alpha-only canvas once per dilation;
+// colour changes (incl. every cycle tick) then only need a composited
+// fill + drawImage instead of a full-image pixel loop.
+function buildMaskCanvas(mask){
+  maskCanvas.width=imgW; maskCanvas.height=imgH;
+  var id=maskCtx.createImageData(imgW,imgH), d=id.data, total=imgW*imgH;
+  for(var i=0;i<total;i++){if(mask[i])d[i*4+3]=255;}
+  maskCtx.putImageData(id,0,0);
+}
+function renderOutput(s){
+  if(outCanvas.width!==imgW||outCanvas.height!==imgH){outCanvas.width=imgW;outCanvas.height=imgH;}
+  // Recolour the mask in place: source-in keeps alpha, replaces colour
+  maskCtx.globalCompositeOperation="source-in";
+  maskCtx.fillStyle="rgb("+s.hR+","+s.hG+","+s.hB+")";
+  maskCtx.fillRect(0,0,imgW,imgH);
+  maskCtx.globalCompositeOperation="source-over";
+  if(s.mode==="overlay"){
+    outCtx.fillStyle="#000";
+    outCtx.fillRect(0,0,imgW,imgH);
+    outCtx.drawImage(sourceCanvas,0,0);
+    outCtx.drawImage(maskCanvas,0,0);
+  }else if(s.mode==="black"){
+    outCtx.fillStyle="#000";
+    outCtx.fillRect(0,0,imgW,imgH);
+    outCtx.drawImage(maskCanvas,0,0);
+  }else{
+    outCtx.clearRect(0,0,imgW,imgH);
+    outCtx.drawImage(maskCanvas,0,0);
   }
-  outCtx.putImageData(imgd,0,0);
 }
 
 // === Zoom & Pan ===
@@ -331,12 +357,33 @@ window.addEventListener("mousemove",function(e){
 });
 window.addEventListener("mouseup",function(){isPanning=false;});
 var ts={};
+function touchDist(e){
+  var dx=e.touches[0].clientX-e.touches[1].clientX;
+  var dy=e.touches[0].clientY-e.touches[1].clientY;
+  return Math.sqrt(dx*dx+dy*dy);
+}
+function panStartFromTouch(t){ts.x=t.clientX;ts.y=t.clientY;ts.px=panX;ts.py=panY;}
 viewer.addEventListener("touchstart",function(e){
-  if(e.touches.length===1){ts.x=e.touches[0].clientX;ts.y=e.touches[0].clientY;ts.px=panX;ts.py=panY;}
+  if(e.touches.length===2){ts.pinch=true;ts.d=touchDist(e);ts.z=zoomScale;}
+  else if(e.touches.length===1){ts.pinch=false;panStartFromTouch(e.touches[0]);}
 },{passive:true});
 viewer.addEventListener("touchmove",function(e){
-  if(e.touches.length===1){panX=ts.px+(e.touches[0].clientX-ts.x);panY=ts.py+(e.touches[0].clientY-ts.y);applyZoom();e.preventDefault();}
+  if(ts.pinch&&e.touches.length===2){
+    var r=viewer.getBoundingClientRect();
+    var mx=(e.touches[0].clientX+e.touches[1].clientX)/2-r.left;
+    var my=(e.touches[0].clientY+e.touches[1].clientY)/2-r.top;
+    zoomTo(ts.z*(touchDist(e)/ts.d),mx,my);
+    e.preventDefault();
+  }else if(!ts.pinch&&e.touches.length===1){
+    panX=ts.px+(e.touches[0].clientX-ts.x);panY=ts.py+(e.touches[0].clientY-ts.y);applyZoom();e.preventDefault();
+  }
 },{passive:false});
+viewer.addEventListener("touchend",function(e){
+  if(ts.pinch&&e.touches.length<2){
+    ts.pinch=false;
+    if(e.touches.length===1)panStartFromTouch(e.touches[0]);
+  }
+},{passive:true});
 zoomInBtn.addEventListener("click",function(){var r=viewer.getBoundingClientRect();zoomTo(zoomScale*1.4,r.width/2,r.height/2);});
 zoomOutBtn.addEventListener("click",function(){var r=viewer.getBoundingClientRect();zoomTo(zoomScale/1.4,r.width/2,r.height/2);});
 zoomFitBtn.addEventListener("click",zoomFit);
