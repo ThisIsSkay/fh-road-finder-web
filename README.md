@@ -2,7 +2,7 @@
 
 # FH6 Screenshot Road Finder
 
-**[Try it live](https://thisisskay.github.io/fh-road-finder-web/)**
+**[Try it live](https://thisisskay.github.io/fh-road-finder-web/)** &middot; **[Try the beta](https://thisisskay.github.io/fh-road-finder-web/preview/beta/)** *(newest features, may be less stable)*
 
 A free, browser-based tool that helps you find the last few undiscovered roads in Forza Horizon 6.
 
