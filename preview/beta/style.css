@@ -93,3 +93,5 @@ details li{margin-bottom:3px}
 details p{margin-top:6px;color:var(--dim);font-size:.88rem}
 footer{text-align:center;padding:14px 20px;color:var(--dim);font-size:.78rem;border-top:1px solid var(--border)}
 .hidden{display:none!important}
+body.picking .viewer-container{cursor:crosshair}
+#eyedropper-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
