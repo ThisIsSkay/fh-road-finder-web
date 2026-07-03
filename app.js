@@ -13,6 +13,8 @@ var sourceCtx=sourceCanvas.getContext("2d");
 var viewerLayout=document.getElementById("viewer-layout");
 var tolSlider=document.getElementById("tolerance-slider");
 var tolValue=document.getElementById("tolerance-value");
+var jpegMode=document.getElementById("jpeg-mode");
+var eyedropBtn=document.getElementById("eyedropper-btn");
 var thickSlider=document.getElementById("thickness-slider");
 var thickValue=document.getElementById("thickness-value");
 var clusterSlider=document.getElementById("min-cluster");
@@ -64,6 +66,7 @@ function getSettings(){
   return{
     tR:tp[0],tG:tp[1],tB:tp[2],
     tol:parseInt(tolSlider.value,10),
+    jpeg:jpegMode.checked,
     hR:hp[0],hG:hp[1],hB:hp[2],
     thickness:parseInt(thickSlider.value,10),
     minCluster:parseInt(clusterSlider.value,10)||1,
@@ -88,6 +91,7 @@ thickSlider.addEventListener("input",function(){
 clusterSlider.addEventListener("input",function(){
   clusterValue.textContent=this.value+" px"; scheduleScan();
 });
+jpegMode.addEventListener("change",function(){scheduleScan();});
 targetPicker.addEventListener("input",function(){
   var c=hex2rgb(this.value);
   targetRGB.value=c.join(",");
@@ -147,13 +151,12 @@ function loadImageFile(file){
       var mb=(file.size/1048576).toFixed(1);
       var isJ=/\.(jpe?g)$/i.test(file.name)||file.type==="image/jpeg";
       var info=esc(file.name)+" &mdash; "+imgW+" x "+imgH+" &mdash; "+mb+" MB";
+      jpegMode.checked=isJ;
       if(isJ){
         if(parseInt(tolSlider.value,10)<5){
           tolSlider.value=5; updateTolLabel();
-          info+='<br><span class="warn">JPEG detected. Tolerance set to 5 automatically.</span>';
-        }else{
-          info+='<br><span class="warn">JPEG detected. Tolerance 5+ recommended.</span>';
         }
+        info+='<br><span class="warn">JPEG detected. JPEG mode enabled to handle compression colour shift.</span>';
       }
       if(imgW*imgH>20000000) info+='<br><span class="warn">Large image. May take a moment.</span>';
       showInfo(info,false);
@@ -221,10 +224,28 @@ function runScan(){
   var data=srcData.data, total=imgW*imgH;
   var mask=new Uint8Array(total);
   var count=0;
-  for(var i=0;i<total;i++){
-    var o=i*4;
-    if(Math.abs(data[o]-s.tR)<=s.tol&&Math.abs(data[o+1]-s.tG)<=s.tol&&Math.abs(data[o+2]-s.tB)<=s.tol){
-      mask[i]=1; count++;
+  if(s.jpeg){
+    // JPEG compression keeps channels of a grey pixel close to each other while
+    // drifting their absolute values, so match on: channel relationships close to
+    // the target's (greyness), brightness near the target's, and a generous
+    // per-channel distance cap. Tolerance scales all three.
+    var spreadLim=8+s.tol, lumLim=10+s.tol, distLim=12+s.tol;
+    var tLum=(s.tR+s.tG+s.tB)/3;
+    var dRG=s.tR-s.tG, dGB=s.tG-s.tB, dRB=s.tR-s.tB;
+    for(var i=0;i<total;i++){
+      var o=i*4, r=data[o], g=data[o+1], b=data[o+2];
+      if(Math.abs(r-s.tR)<=distLim&&Math.abs(g-s.tG)<=distLim&&Math.abs(b-s.tB)<=distLim
+        &&Math.abs((r-g)-dRG)<=spreadLim&&Math.abs((g-b)-dGB)<=spreadLim&&Math.abs((r-b)-dRB)<=spreadLim
+        &&Math.abs((r+g+b)/3-tLum)<=lumLim){
+        mask[i]=1; count++;
+      }
+    }
+  }else{
+    for(var i2=0;i2<total;i2++){
+      var o2=i2*4;
+      if(Math.abs(data[o2]-s.tR)<=s.tol&&Math.abs(data[o2+1]-s.tG)<=s.tol&&Math.abs(data[o2+2]-s.tB)<=s.tol){
+        mask[i2]=1; count++;
+      }
     }
   }
   // Cluster filter
@@ -349,6 +370,7 @@ viewer.addEventListener("wheel",function(e){
 },{passive:false});
 viewer.addEventListener("mousedown",function(e){
   if(e.button!==0) return;
+  if(picking){e.preventDefault();samplePick(e.clientX,e.clientY);return;}
   isPanning=true;psx=e.clientX;psy=e.clientY;ppx=panX;ppy=panY;e.preventDefault();
 });
 window.addEventListener("mousemove",function(e){
@@ -392,6 +414,39 @@ zoom100Btn.addEventListener("click",function(){var r=viewer.getBoundingClientRec
 // Auto-fit on window resize
 window.addEventListener("resize",function(){if(srcData)zoomFit();});
 
+// === Eyedropper (pick target colour from the image) ===
+var picking=false;
+function setPicking(on){
+  picking=on;
+  eyedropBtn.classList.toggle("active",on);
+  document.body.classList.toggle("picking",on);
+  eyedropBtn.textContent=on?"Click the road…":"Pick from image";
+}
+eyedropBtn.addEventListener("click",function(){
+  if(!srcData) return;
+  setPicking(!picking);
+});
+document.addEventListener("keydown",function(e){if(e.key==="Escape"&&picking)setPicking(false);});
+function samplePick(cx,cy){
+  var r=viewer.getBoundingClientRect();
+  var ix=Math.round((cx-r.left-panX)/zoomScale), iy=Math.round((cy-r.top-panY)/zoomScale);
+  if(ix<0||iy<0||ix>=imgW||iy>=imgH){setPicking(false);return;}
+  // 3x3 median around the click to smooth compression noise
+  var rs=[],gs=[],bs=[];
+  for(var dy=-1;dy<=1;dy++){for(var dx=-1;dx<=1;dx++){
+    var x=Math.min(imgW-1,Math.max(0,ix+dx)), y=Math.min(imgH-1,Math.max(0,iy+dy));
+    var o=(y*imgW+x)*4;
+    rs.push(srcData.data[o]);gs.push(srcData.data[o+1]);bs.push(srcData.data[o+2]);
+  }}
+  function med(a){a.sort(function(p,q){return p-q;});return a[4];}
+  var tr=med(rs),tg=med(gs),tb=med(bs);
+  targetRGB.value=tr+","+tg+","+tb;
+  targetPicker.value=rgb2hex(tr,tg,tb);
+  targetDisp.textContent="RGB("+tr+", "+tg+", "+tb+")";
+  setPicking(false);
+  runScan();
+}
+
 // === Download ===
 downloadBtn.addEventListener("click",function(){
   if(!rawMask) return;
@@ -428,6 +483,7 @@ function dlAs(mode){
 
 // === Reset ===
 resetBtn.addEventListener("click",function(){
+  setPicking(false);
   srcData=null;rawMask=null;dilatedMask=null;imgW=0;imgH=0;
   viewerLayout.classList.add("hidden");
   imageInfo.classList.add("hidden");imageInfo.innerHTML="";
