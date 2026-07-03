@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FH6 Road Finder</title>
+  <meta name="description" content="Free browser tool that highlights possible undiscovered roads in Forza Horizon 6 map screenshots. 100% client-side — your images never leave your browser.">
+  <meta property="og:title" content="FH6 Road Finder">
+  <meta property="og:description" content="Stuck at 99% roads discovered? Drop in a map screenshot and instantly highlight possible undiscovered roads. Free, no upload, runs in your browser.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://thisisskay.github.io/fh-road-finder-web/">
+  <meta property="og:image" content="https://thisisskay.github.io/fh-road-finder-web/assets/example-after-overlay.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%F0%9F%97%BA%EF%B8%8F%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css?v=20260603-2">
+</head>
+<body>
+  <header>
+    <h1>FH6 Road Finder</h1>
+    <p class="subtitle">Detect possible undiscovered roads in Forza Horizon 6 map screenshots</p>
+    <p class="privacy-note">Images are processed locally in your browser and are not uploaded.</p>
+  </header>
+  <main>
+    <section class="panel" id="upload-section">
+      <h2>Upload Screenshot</h2>
+      <div id="drop-zone" class="drop-zone">
+        <p class="drop-text">Drag &amp; drop a map screenshot here</p>
+        <p class="drop-or">or</p>
+        <label class="file-label"><input type="file" id="file-input" accept="image/png,image/jpeg">Choose file</label>
+        <p class="drop-formats">Direct game screenshots only: PNG best, JPEG supported. Phone photos cannot be scanned by this tool.</p>
+      </div>
+      <div class="site-notice">
+        <strong>Built for FH6.</strong> FH1 to FH5 may not work because their map colours and rendering can differ. Earlier-game support may be added if enough players ask for it.
+      </div>
+      <div id="image-info" class="image-info hidden"></div>
+    </section>
+    <div class="viewer-layout hidden" id="viewer-layout">
+      <section class="panel viewer-panel">
+        <div class="viewer-header">
+          <div class="zoom-controls">
+            <button id="zoom-in-btn" class="btn btn-small" title="Zoom in">+</button>
+            <button id="zoom-out-btn" class="btn btn-small" title="Zoom out">&minus;</button>
+            <button id="zoom-fit-btn" class="btn btn-small" title="Fit to view">Fit</button>
+            <button id="zoom-100-btn" class="btn btn-small" title="Actual pixels">1:1</button>
+            <span id="zoom-level" class="zoom-level">100%</span>
+          </div>
+          <div id="results-stats" class="results-stats"></div>
+        </div>
+        <div id="viewer-container" class="viewer-container">
+          <canvas id="output-canvas" class="output-canvas"></canvas>
+        </div>
+        <p class="viewer-hint">Scroll to zoom &middot; Drag to pan</p>
+        <div class="button-row">
+          <button id="download-btn" class="btn btn-primary" disabled>Download PNG</button>
+          <select id="download-mode" class="download-mode-select">
+            <option value="current">Current view</option>
+            <option value="overlay">Overlay</option>
+            <option value="black">Black highlight</option>
+            <option value="transparent">Transparent mask</option>
+            <option value="all">All three</option>
+          </select>
+          <button id="reset-btn" class="btn btn-secondary">New image</button>
+        </div>
+      </section>
+      <aside class="panel controls-panel">
+        <h2>Settings</h2>
+        <div class="ctrl">
+          <label>Tolerance: <span id="tolerance-value" class="val">0 (Ultra strict)</span></label>
+          <input type="range" id="tolerance-slider" min="0" max="15" value="0" step="1" class="slider">
+          <div class="slider-labels"><span>0 Strict</span><span>5 Loose</span><span>15</span></div>
+        </div>
+        <div class="ctrl">
+          <label>Line thickness: <span id="thickness-value" class="val">2 px</span></label>
+          <input type="range" id="thickness-slider" min="1" max="15" value="2" step="1" class="slider">
+          <div class="slider-labels"><span>1 Original</span><span>5</span><span>15 Thick</span></div>
+          <span class="hint">Makes small detections easier to see</span>
+        </div>
+        <div class="ctrl">
+          <label>Highlight colour</label>
+          <div class="colour-swatches" id="highlight-swatches">
+            <button class="swatch active" data-rgb="255,0,0" style="background:#ff0000" title="Red"></button>
+            <button class="swatch" data-rgb="0,255,0" style="background:#00ff00" title="Green"></button>
+            <button class="swatch" data-rgb="255,255,0" style="background:#ffff00" title="Yellow"></button>
+            <button class="swatch" data-rgb="0,255,255" style="background:#00ffff" title="Cyan"></button>
+            <button class="swatch" data-rgb="255,0,255" style="background:#ff00ff" title="Magenta"></button>
+            <button class="swatch" data-rgb="255,165,0" style="background:#ffa500" title="Orange"></button>
+            <button class="swatch" data-rgb="255,255,255" style="background:#ffffff" title="White"></button>
+            <input type="color" id="highlight-picker" value="#ff0000" title="Custom colour">
+          </div>
+          <input type="hidden" id="highlight-rgb" value="255,0,0">
+          <label class="check-row">
+            <input type="checkbox" id="cycle-colours" checked>
+            <span>Cycle highlight colours</span>
+          </label>
+          <span class="hint">Animates detected pixels to make tiny roads easier to notice</span>
+          <label class="cycle-speed-label">Cycle speed: <span id="cycle-speed-value" class="val">7 / 10</span></label>
+          <input type="range" id="cycle-speed" min="1" max="10" value="7" step="1" class="slider">
+          <div class="slider-labels"><span>1 Slow</span><span>10 Fast</span></div>
+        </div>
+        <div class="ctrl">
+          <label>Output</label>
+          <div class="mode-buttons" id="mode-buttons">
+            <button class="mode-btn active" data-mode="overlay">Overlay</button>
+            <button class="mode-btn" data-mode="black">Black</button>
+            <button class="mode-btn" data-mode="transparent">Transparent</button>
+          </div>
+        </div>
+        <div class="ctrl">
+          <label>Min cluster: <span id="cluster-value" class="val">3 px</span></label>
+          <input type="range" id="min-cluster" min="1" max="50" value="3" step="1" class="slider">
+          <span class="hint">Raise to hide noise dots</span>
+        </div>
+        <details class="advanced-toggle">
+          <summary>Advanced</summary>
+          <div class="ctrl">
+            <label>Target colour</label>
+            <div class="target-colour-row">
+              <input type="color" id="target-picker" value="#808080">
+              <span id="target-rgb-display" class="rgb-display">RGB(128, 128, 128)</span>
+            </div>
+            <input type="hidden" id="target-rgb" value="128,128,128">
+            <span class="hint">The grey of undiscovered roads. Change only if needed.</span>
+          </div>
+        </details>
+      </aside>
+    </div>
+    <section class="panel" id="help-section">
+      <h2>Tips</h2>
+      <details open><summary>Why this tool matters</summary>
+        <p>When one tiny road segment is still missing, scanning the whole map by eye is painful. This tool highlights likely undiscovered-road pixels so you can focus on suspicious spots instead of checking every road again.</p>
+      </details>
+      <details><summary>Compatibility and screenshot rules</summary>
+        <ul><li>Built for <strong>Forza Horizon 6</strong>.</li><li><strong>FH1 to FH5</strong> may not work correctly unless support is added later.</li><li>Use screenshots captured directly from the game.</li><li><strong>Phone photos of a screen cannot be scanned by this tool</strong> because camera processing and screen glare change the colours.</li><li>PNG is best. JPEG can work if it is a direct screenshot, but may need tolerance 5 or 8.</li></ul>
+      </details>
+      <details><summary>How to take a clean map screenshot</summary>
+        <ol><li>Open the Forza Horizon 6 map screen.</li><li>Zoom out to see as much map as possible.</li><li>Use PNG format (Win+Shift+S, paste into Paint, save as PNG).</li><li>JPEG works if it is a direct screenshot, but may need tolerance 5 or 8.</li><li>Avoid overlapping UI elements.</li></ol>
+      </details>
+      <details><summary>How to find small missing roads</summary>
+        <ol><li>Switch to <strong>Black</strong> output mode.</li><li>Increase <strong>Line thickness</strong> to make tiny dots visible.</li><li>Scroll to zoom in, drag to pan around.</li><li>Use 1:1 to see actual pixels.</li><li>Try different highlight colours for contrast.</li></ol>
+      </details>
+      <details><summary>Tolerance guide</summary>
+        <ul><li><strong>0</strong> &mdash; Exact match. Clean PNG only.</li><li><strong>1-2</strong> &mdash; Strict/Normal. Good for PNG.</li><li><strong>5</strong> &mdash; Loose. Start here for JPEG.</li><li><strong>8+</strong> &mdash; Very loose. More false positives.</li></ul>
+        <p>JPEG compression shifts pixel colours, so higher tolerance is needed.</p>
+      </details>
+    </section>
+  </main>
+  <footer><p>FH6 Road Finder &mdash; open source, fully client-side. No data leaves your browser.</p></footer>
+  <canvas id="source-canvas" style="display:none"></canvas>
+  <input type="hidden" id="output-mode" value="overlay">
+  <script src="app.js?v=20260702-1"></script>
+</body>
+</html>

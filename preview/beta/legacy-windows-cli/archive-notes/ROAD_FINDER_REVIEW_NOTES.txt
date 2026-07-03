@@ -1,0 +1,135 @@
+FH6 Road Finder Legacy Review Notes
+===================================
+
+These notes combine the two remaining historical review files from the
+Windows BAT + Python version:
+
+- CLAUDE_REVIEW_NOTES.txt
+- PROMPT_FOR_CLAUDE_REVIEW.txt
+
+They are preserved only as historical context for the archived CLI.
+
+
+Claude Review Notes - 2026-05-28
+--------------------------------
+
+For Codex to fix in the next iteration.
+
+TESTED: Ran all 8 JPEG screenshots through the consolidated build.
+Result: 56 clusters found at tolerance 5. BAT runs clean. No crashes.
+
+BUGS TO FIX:
+
+1. Black highlight uses raw_mask instead of filtered_mask.
+
+   process_image() calls save_black_highlight(black_file, raw_mask, ...)
+   but should use the cluster-filtered mask returned by detect_clusters().
+   Same issue for save_overlay and save_transparent: all three should use
+   filtered_mask so tiny noise pixels below min_cluster_size are excluded from
+   the output images.
+
+   Fix: change the output image calls from raw_mask to filtered_mask. The
+   variable is already available:
+
+   filtered_mask, clusters = detect_clusters(...)
+
+2. CSV generation was removed but should be restored.
+
+   The combined CSV (all_clusters_summary.csv) and per-image CSVs are useful
+   for sorting clusters by pixel count and finding exact coordinates. The
+   script currently prints "CSV files were not created", which is confusing.
+   Either restore CSV or remove that message.
+
+3. Grid mode was removed from the BAT per user request, but the Python script
+   still supports --grid. This is fine: leave the CLI option in the Python
+   script for advanced users but keep it out of the BAT menu.
+
+UX IMPROVEMENTS TO ADD:
+
+4. Auto-open report after completion.
+
+   Add this before goto end_ok in the BAT:
+
+   if exist "%OUTPUT_DIR%\report.html" start "" "%OUTPUT_DIR%\report.html"
+
+5. Restore the cluster coordinate table in the HTML report.
+
+   The earlier version had a per-record table showing cluster_id, pixel_count,
+   center_x, center_y, bounding box, and dimensions. This was removed. Users
+   need coordinates to find spots on the map.
+
+6. Clear all old output files before each run, not just CSVs.
+
+   Old PNG files from a previous tolerance run linger in output/ and confuse
+   users who think they are from the current run.
+
+   Suggestion: delete output/*.png, output/*.csv, and output/report.html at
+   the start of each run.
+
+OVERALL: The consolidated build is solid. The BAT is well-structured with
+goto-based error handling, smart JPEG defaults, and clean escaping. The Python
+script is cleaner than the original with proper validation and dataclass-based
+output records.
+
+
+Claude Review Prompt
+--------------------
+
+Please review this consolidated FH6 Road Finder build:
+
+C:\Users\user\Desktop\fh6_road_finder\consolidated
+
+Goal:
+Combine the best parts of the Claude and Codex versions into one portable
+Windows tool for detecting possible missing roads in Forza Horizon 6 map
+screenshots.
+
+Important current decision:
+Grid mode was intentionally removed to keep the workflow simpler. Please do
+not re-add it unless you find a strong reason. Instead, check that no BAT
+prompt, README instruction, or Python CLI option still exposes grid mode.
+
+CSV output was intentionally removed. The user only wants to visually inspect
+the generated images because screenshot coordinates are not useful to match
+in-game.
+
+Tiny blob suppression was intentionally removed from the generated images.
+Overlay, black highlight, and transparent mask files should use the raw
+detected mask so even very small red hits remain visible. Any cluster counting
+in the console/report is only secondary and must not hide pixels in the images.
+
+Please check:
+
+1. Run_FH6_Road_Finder.bat
+   - Does it run when double-clicked?
+   - Does it create/use .venv correctly?
+   - Does it install/update pillow, numpy, and opencv-python?
+   - Does the tolerance menu work?
+   - Does JPEG input default toward tolerance 5?
+   - Are all parentheses escaped safely in echo lines inside IF blocks?
+   - Does it avoid asking about 3x3 grid mode?
+
+2. tools\fh6_road_finder.py
+   - Does it support PNG, JPG/JPEG, BMP, TIF/TIFF?
+   - Does it warn that PNG is preferred and JPEG may need tolerance 5 or 8?
+   - Does channel mode use max-channel threshold logic?
+   - Does euclidean mode behave reasonably?
+   - Are tiny detected pixels still visible in overlay, black highlight, and
+     transparent mask images?
+   - Are the output file names clear?
+   - Are overlay, black highlight, transparent mask, and report.html generated
+     correctly?
+   - Confirm no per-image CSV and no all_clusters_summary.csv are created.
+
+3. Try with the JPEG screenshots currently used in:
+
+C:\Users\user\Desktop\fh6_road_finder\claude\input
+
+Useful test command:
+
+cd /d "C:\Users\user\Desktop\fh6_road_finder\consolidated"
+".venv\Scripts\python.exe" "tools\fh6_road_finder.py" --input input --output output --target-rgb 128,128,128 --tolerances 5 --min-cluster-size 8 --highlight-color 255,0,0 --overlay-alpha 0.85 --distance-mode channel
+
+Please report any bugs, especially BAT parsing problems, missing outputs,
+stale grid-mode references, accidental CSV output, hidden tiny red hits, or
+confusing beginner-facing text.
