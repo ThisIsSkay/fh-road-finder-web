@@ -95,3 +95,9 @@ footer{text-align:center;padding:14px 20px;color:var(--dim);font-size:.78rem;bor
 .hidden{display:none!important}
 body.picking .viewer-container{cursor:crosshair}
 #eyedropper-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.suspects{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:8px;font-size:.8rem;color:var(--dim)}
+.suspects-label{margin-right:4px}
+.suspect-chip{width:26px;height:24px;border-radius:4px;border:1px solid var(--inp-b);background:var(--inp);color:var(--text);cursor:pointer;font-size:.78rem;font-weight:600;font-family:inherit}
+.suspect-chip:hover{border-color:var(--accent);color:var(--accent)}
+.suspect-marker{position:absolute;border:2px dashed var(--accent);border-radius:4px;pointer-events:none;animation:suspectPulse 1s ease-in-out infinite;z-index:5}
+@keyframes suspectPulse{0%,100%{opacity:1}50%{opacity:.3}}

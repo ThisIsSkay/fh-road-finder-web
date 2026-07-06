@@ -12,7 +12,7 @@
   <meta property="og:image" content="https://thisisskay.github.io/fh-road-finder-web/assets/example-after-overlay.png">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%F0%9F%97%BA%EF%B8%8F%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="style.css?v=20260703-1">
+  <link rel="stylesheet" href="style.css?v=20260706-1">
 </head>
 <body>
   <header>
@@ -46,8 +46,10 @@
           </div>
           <div id="results-stats" class="results-stats"></div>
         </div>
+        <div id="suspects" class="suspects hidden"></div>
         <div id="viewer-container" class="viewer-container">
           <canvas id="output-canvas" class="output-canvas"></canvas>
+          <div id="suspect-marker" class="suspect-marker hidden"></div>
         </div>
         <p class="viewer-hint">Scroll to zoom &middot; Drag to pan</p>
         <div class="button-row">
@@ -153,6 +155,6 @@
   <footer><p>FH6 Road Finder &mdash; open source, fully client-side. No data leaves your browser.</p></footer>
   <canvas id="source-canvas" style="display:none"></canvas>
   <input type="hidden" id="output-mode" value="overlay">
-  <script src="app.js?v=20260703-1"></script>
+  <script src="app.js?v=20260706-1"></script>
 </body>
 </html>
