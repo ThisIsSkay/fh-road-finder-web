@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FH6 Road Finder</title>
-  <link rel="stylesheet" href="style.css?v=20260603-2">
+  <link rel="stylesheet" href="style.css?v=20260613-2">
 </head>
+
 <body>
   <header>
     <h1>FH6 Road Finder</h1>
@@ -15,16 +17,35 @@
   <main>
     <section class="panel" id="upload-section">
       <h2>Upload Screenshot</h2>
-      <div id="drop-zone" class="drop-zone">
+      <div id="drop-zone" class="drop-zone" role="button" tabindex="0"
+        aria-label="Choose, drop, or paste a map screenshot">
         <p class="drop-text">Drag &amp; drop a map screenshot here</p>
         <p class="drop-or">or</p>
-        <label class="file-label"><input type="file" id="file-input" accept="image/png,image/jpeg">Choose file</label>
-        <p class="drop-formats">Direct game screenshots only: PNG best, JPEG supported. Phone photos cannot be scanned by this tool.</p>
+        <label class="file-label"><input type="file" id="file-input" accept="image/png,image/jpeg,image/webp">Choose
+          file</label>
+        <p class="drop-formats">Direct game screenshots only: PNG best, JPEG and WebP supported. Phone photos cannot be
+          scanned by this tool.</p>
+      </div>
+      <div class="upload-alternatives">
+        <p id="paste-hint" class="paste-hint">
+          Paste a screenshot anywhere on this screen with <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>V</kbd>
+        </p>
+        <div class="url-input-block">
+          <label class="url-label" for="image-url">Or load from an image URL</label>
+          <div class="url-row">
+            <input type="url" id="image-url" class="url-input" placeholder="https://example.com/map.png"
+              aria-describedby="url-help" inputmode="url" autocomplete="url" spellcheck="false">
+            <button type="button" id="load-url-btn" class="btn btn-secondary url-load-btn">Load URL</button>
+          </div>
+          <p id="url-help" class="url-help">The image host must allow cross-origin access. If it blocks the request,
+            download the image and upload or paste it instead.</p>
+        </div>
       </div>
       <div class="site-notice">
-        <strong>Built for FH6.</strong> FH1 to FH5 may not work because their map colours and rendering can differ. Earlier-game support may be added if enough players ask for it.
+        <strong>Built for FH6.</strong> FH1 to FH5 may not work because their map colours and rendering can differ.
+        Earlier-game support may be added if enough players ask for it.
       </div>
-      <div id="image-info" class="image-info hidden"></div>
+      <div id="image-info" class="image-info hidden" role="status" aria-live="polite" aria-atomic="true"></div>
     </section>
     <div class="viewer-layout hidden" id="viewer-layout">
       <section class="panel viewer-panel">
@@ -118,27 +139,60 @@
     </div>
     <section class="panel" id="help-section">
       <h2>Tips</h2>
-      <details open><summary>Why this tool matters</summary>
-        <p>When one tiny road segment is still missing, scanning the whole map by eye is painful. This tool highlights likely undiscovered-road pixels so you can focus on suspicious spots instead of checking every road again.</p>
+      <details open>
+        <summary>Why this tool matters</summary>
+        <p>When one tiny road segment is still missing, scanning the whole map by eye is painful. This tool highlights
+          likely undiscovered-road pixels so you can focus on suspicious spots instead of checking every road again.</p>
       </details>
-      <details><summary>Compatibility and screenshot rules</summary>
-        <ul><li>Built for <strong>Forza Horizon 6</strong>.</li><li><strong>FH1 to FH5</strong> may not work correctly unless support is added later.</li><li>Use screenshots captured directly from the game.</li><li><strong>Phone photos of a screen cannot be scanned by this tool</strong> because camera processing and screen glare change the colours.</li><li>PNG is best. JPEG can work if it is a direct screenshot, but may need tolerance 5 or 8.</li></ul>
+      <details>
+        <summary>Compatibility and screenshot rules</summary>
+        <ul>
+          <li>Built for <strong>Forza Horizon 6</strong>.</li>
+          <li><strong>FH1 to FH5</strong> may not work correctly unless support is added later.</li>
+          <li>Use screenshots captured directly from the game.</li>
+          <li><strong>Phone photos of a screen cannot be scanned by this tool</strong> because camera processing and
+            screen glare change the colours.</li>
+          <li>PNG is best. JPEG can work if it is a direct screenshot, but may need tolerance 5 or 8.</li>
+        </ul>
       </details>
-      <details><summary>How to take a clean map screenshot</summary>
-        <ol><li>Open the Forza Horizon 6 map screen.</li><li>Zoom out to see as much map as possible.</li><li>Use PNG format (Win+Shift+S, paste into Paint, save as PNG).</li><li>JPEG works if it is a direct screenshot, but may need tolerance 5 or 8.</li><li>Avoid overlapping UI elements.</li></ol>
+      <details>
+        <summary>How to take a clean map screenshot</summary>
+        <ol>
+          <li>Open the Forza Horizon 6 map screen.</li>
+          <li>Zoom out to see as much map as possible.</li>
+          <li>Use PNG format (Win+Shift+S, paste into Paint, save as PNG).</li>
+          <li>JPEG works if it is a direct screenshot, but may need tolerance 5 or 8.</li>
+          <li>Avoid overlapping UI elements.</li>
+        </ol>
       </details>
-      <details><summary>How to find small missing roads</summary>
-        <ol><li>Switch to <strong>Black</strong> output mode.</li><li>Increase <strong>Line thickness</strong> to make tiny dots visible.</li><li>Scroll to zoom in, drag to pan around.</li><li>Use 1:1 to see actual pixels.</li><li>Try different highlight colours for contrast.</li></ol>
+      <details>
+        <summary>How to find small missing roads</summary>
+        <ol>
+          <li>Switch to <strong>Black</strong> output mode.</li>
+          <li>Increase <strong>Line thickness</strong> to make tiny dots visible.</li>
+          <li>Scroll to zoom in, drag to pan around.</li>
+          <li>Use 1:1 to see actual pixels.</li>
+          <li>Try different highlight colours for contrast.</li>
+        </ol>
       </details>
-      <details><summary>Tolerance guide</summary>
-        <ul><li><strong>0</strong> &mdash; Exact match. Clean PNG only.</li><li><strong>1-2</strong> &mdash; Strict/Normal. Good for PNG.</li><li><strong>5</strong> &mdash; Loose. Start here for JPEG.</li><li><strong>8+</strong> &mdash; Very loose. More false positives.</li></ul>
+      <details>
+        <summary>Tolerance guide</summary>
+        <ul>
+          <li><strong>0</strong> &mdash; Exact match. Clean PNG only.</li>
+          <li><strong>1-2</strong> &mdash; Strict/Normal. Good for PNG.</li>
+          <li><strong>5</strong> &mdash; Loose. Start here for JPEG.</li>
+          <li><strong>8+</strong> &mdash; Very loose. More false positives.</li>
+        </ul>
         <p>JPEG compression shifts pixel colours, so higher tolerance is needed.</p>
       </details>
     </section>
   </main>
-  <footer><p>FH6 Road Finder &mdash; open source, fully client-side. No data leaves your browser.</p></footer>
+  <footer>
+    <p>FH6 Road Finder &mdash; open source, fully client-side. No data leaves your browser.</p>
+  </footer>
   <canvas id="source-canvas" style="display:none"></canvas>
   <input type="hidden" id="output-mode" value="overlay">
-  <script src="app.js?v=20260603-2"></script>
+  <script src="app.js?v=20260613-2"></script>
 </body>
+
 </html>

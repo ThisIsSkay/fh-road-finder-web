@@ -6,7 +6,7 @@
 
 A free, browser-based tool that helps you find the last few undiscovered roads in Forza Horizon 6.
 
-Drop in a map screenshot and the tool instantly highlights any pixels matching the undiscovered-road grey. Zoom in, pan around, change colours, and adjust tolerance — all live, no page reload needed.
+Upload, drop, paste, or load a map screenshot from a URL and the tool instantly highlights any pixels matching the undiscovered-road grey. Zoom in, pan around, change colours, and adjust tolerance — all live, no page reload needed.
 
 **No installation. No server. No sign-up. Your images never leave your browser.**
 
@@ -38,7 +38,7 @@ The animated GIFs show the cycling highlight effect in the tool's **Overlay** an
 ## How It Works
 
 1. Open the tool in any modern browser (Chrome, Edge, Firefox).
-2. Drag and drop a Forza Horizon 6 map screenshot.
+2. Choose a file, drag and drop it, paste it with Ctrl/Cmd+V, or enter a direct PNG/JPEG/WebP URL.
 3. The tool scans every pixel for the undiscovered-road grey (RGB 128, 128, 128) and highlights matches instantly.
 4. Adjust tolerance, highlight colour, line thickness, and output mode — the view updates in real time.
 5. Zoom in and pan around to find small road segments.
@@ -47,6 +47,7 @@ The animated GIFs show the cycling highlight effect in the tool's **Overlay** an
 ## Features
 
 - **Live scanning** — results update as you adjust settings, no button clicks needed.
+- **Flexible image input** — choose a file, drag and drop, paste a screenshot, or load a direct PNG/JPEG/WebP URL.
 - **Zoom and pan** — scroll to zoom into any area, drag to pan. Use the 1:1 button to see actual pixels.
 - **Line thickness** — dilate detected pixels so even a single-pixel match becomes a visible dot.
 - **Multiple highlight colours** — red, green, yellow, cyan, magenta, orange, white, or pick any custom colour.
@@ -56,7 +57,9 @@ The animated GIFs show the cycling highlight effect in the tool's **Overlay** an
 
 ## Privacy
 
-All processing runs locally in the browser using JavaScript and the Canvas API. No images are uploaded, no data is sent anywhere, and the tool works fully offline after the page loads.
+All processing runs locally in the browser using JavaScript and the Canvas API. Uploaded and pasted images are never uploaded and the tool works fully offline after the page loads.
+
+Loading an image URL makes a direct request from your browser to the source host. That host must allow cross-origin (CORS) access. If it blocks the request, download the image and upload or paste it instead.
 
 ## Default Settings
 
