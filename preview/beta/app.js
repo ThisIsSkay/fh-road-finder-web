@@ -35,6 +35,8 @@ var dlMode=document.getElementById("download-mode");
 var resetBtn=document.getElementById("reset-btn");
 var statsEl=document.getElementById("results-stats");
 var viewer=document.getElementById("viewer-container");
+var suspectsEl=document.getElementById("suspects");
+var marker=document.getElementById("suspect-marker");
 var outCanvas=document.getElementById("output-canvas");
 var outCtx=outCanvas.getContext("2d");
 var zoomInBtn=document.getElementById("zoom-in-btn");
@@ -248,12 +250,23 @@ function runScan(){
       }
     }
   }
-  // Cluster filter
+  // Cluster labelling: feeds both the min-cluster filter and the suspects ranking
+  var lab=labelClusters(mask,imgW,imgH,data,s.tR,s.tG,s.tB);
+  var kept=[];
   if(s.minCluster>1){
-    mask=filterClusters(mask,imgW,imgH,s.minCluster);
-    count=0; for(var j=0;j<total;j++){if(mask[j])count++;}
+    var keep=new Uint8Array(lab.clusters.length+1);
+    for(var ci=0;ci<lab.clusters.length;ci++){
+      var cc=lab.clusters[ci];
+      if(cc.size>=s.minCluster){keep[cc.label]=1;kept.push(cc);}
+    }
+    var out=new Uint8Array(total); count=0;
+    for(var j=0;j<total;j++){if(lab.labels[j]&&keep[lab.labels[j]]){out[j]=1;count++;}}
+    mask=out;
+  }else{
+    kept=lab.clusters;
   }
   rawMask=mask;
+  updateSuspects(kept);
   // Stats
   var pct=total>0?((count/total)*100).toFixed(3):"0";
   statsEl.innerHTML='<span class="stat-value">'+fmt(count)+'</span> px matched ('+pct+'%)';
@@ -261,14 +274,20 @@ function runScan(){
   downloadBtn.disabled=false;
 }
 
-function filterClusters(mask,w,h,min){
-  var total=w*h, labels=new Int32Array(total), nl=1, sizes=[0];
+function labelClusters(mask,w,h,data,tR,tG,tB){
+  var total=w*h, labels=new Int32Array(total), clusters=[], nl=1;
   for(var i=0;i<total;i++){
     if(!mask[i]||labels[i]) continue;
-    var q=[i]; labels[i]=nl; var sz=0,hd=0;
+    var q=[i]; labels[i]=nl; var hd=0, sz=0, devSum=0;
+    var minX=w,minY=h,maxX=0,maxY=0;
     while(hd<q.length){
       var idx=q[hd++]; sz++;
+      var o=idx*4;
+      var dr=Math.abs(data[o]-tR),dg=Math.abs(data[o+1]-tG),db=Math.abs(data[o+2]-tB);
+      devSum+=dr>dg?(dr>db?dr:db):(dg>db?dg:db);
       var x=idx%w,y=(idx-x)/w;
+      if(x<minX)minX=x; if(x>maxX)maxX=x;
+      if(y<minY)minY=y; if(y>maxY)maxY=y;
       for(var dy=-1;dy<=1;dy++){for(var dx=-1;dx<=1;dx++){
         if(!dx&&!dy) continue;
         var nx=x+dx,ny=y+dy;
@@ -277,11 +296,95 @@ function filterClusters(mask,w,h,min){
         if(mask[ni]&&!labels[ni]){labels[ni]=nl;q.push(ni);}
       }}
     }
-    sizes.push(sz); nl++;
+    clusters.push({label:nl,size:sz,minX:minX,minY:minY,maxX:maxX,maxY:maxY,avgDev:devSum/sz});
+    nl++;
   }
-  var out=new Uint8Array(total);
-  for(var k=0;k<total;k++){if(labels[k]>0&&sizes[labels[k]]>=min)out[k]=1;}
-  return out;
+  return {labels:labels,clusters:clusters};
+}
+
+// === Suspects: rank clusters by how road-like they are ===
+// Shape: roads are long and thin (1-4 px wide); false positives (rocks,
+// buildings, terrain patches) are compact blobs. Colour: a real undiscovered
+// road sits closer to the target grey than terrain that merely fell inside
+// the match band, so clusters are also weighted by average colour deviation.
+var suspects=[];
+function roadScore(c){
+  var bw=c.maxX-c.minX+1, bh=c.maxY-c.minY+1;
+  var len=Math.sqrt(bw*bw+bh*bh);
+  var width=c.size/len;
+  var score=len/Math.max(0.7,width);
+  if(width>6) score*=0.2;
+  var dev=c.avgDev||0;
+  score*=1/(1+(dev/5)*(dev/5));
+  return score;
+}
+function updateSuspects(clusters){
+  // Skip clusters entirely inside the top/bottom screen bands where game HUD
+  // (key hints, player badge, fps counters) lives — UI text is neutral grey
+  // and thin, i.e. maximally road-like, but never an actual road.
+  var topBand=imgH*0.06, bottomBand=imgH*0.90;
+  suspects=clusters.filter(function(c){
+    return !(c.maxY<topBand||c.minY>bottomBand);
+  });
+  for(var i=0;i<suspects.length;i++){suspects[i].score=roadScore(suspects[i]);}
+  suspects.sort(function(a,b){return b.score-a.score;});
+  // One chip per area: suppress suspects too close to a higher-ranked one,
+  // so the ten slots point at ten distinct places on the map.
+  var dedupR=Math.sqrt(imgW*imgW+imgH*imgH)*0.04, dedupR2=dedupR*dedupR;
+  var picked=[];
+  for(var pi=0;pi<suspects.length&&picked.length<10;pi++){
+    var cand=suspects[pi];
+    var ccx=(cand.minX+cand.maxX)/2, ccy=(cand.minY+cand.maxY)/2, ok=true;
+    for(var pj=0;pj<picked.length;pj++){
+      var pk=picked[pj];
+      var ddx=ccx-(pk.minX+pk.maxX)/2, ddy=ccy-(pk.minY+pk.maxY)/2;
+      if(ddx*ddx+ddy*ddy<dedupR2){ok=false;break;}
+    }
+    if(ok)picked.push(cand);
+  }
+  suspects=picked;
+  hideMarker();
+  if(!suspects.length){suspectsEl.classList.add("hidden");suspectsEl.innerHTML="";return;}
+  var html='<span class="suspects-label">Most road-like spots &mdash; click to jump:</span>';
+  for(var k=0;k<suspects.length;k++){
+    var c=suspects[k], bw=c.maxX-c.minX+1, bh=c.maxY-c.minY+1;
+    html+='<button class="suspect-chip" data-i="'+k+'" title="'+fmt(c.size)+' px, '+bw+'&times;'+bh+' area">'+(k+1)+'</button>';
+  }
+  suspectsEl.innerHTML=html;
+  suspectsEl.classList.remove("hidden");
+}
+suspectsEl.addEventListener("click",function(e){
+  var btn=e.target.closest(".suspect-chip"); if(!btn) return;
+  jumpToSuspect(suspects[parseInt(btn.dataset.i,10)]);
+});
+function jumpToSuspect(c){
+  if(!c) return;
+  var bw=c.maxX-c.minX+1, bh=c.maxY-c.minY+1;
+  var cx=(c.minX+c.maxX)/2, cy=(c.minY+c.maxY)/2;
+  zoomScale=Math.min(12,Math.max(3,200/Math.max(bw,bh)));
+  panX=viewer.clientWidth/2-cx*zoomScale;
+  panY=viewer.clientHeight/2-cy*zoomScale;
+  applyZoom();
+  showMarker(c);
+}
+var markerC=null, markerTimer=null;
+function showMarker(c){
+  markerC=c;
+  positionMarker();
+  marker.classList.remove("hidden");
+  clearTimeout(markerTimer);
+  markerTimer=setTimeout(hideMarker,4000);
+}
+function hideMarker(){
+  marker.classList.add("hidden"); markerC=null;
+}
+function positionMarker(){
+  if(!markerC) return;
+  var pad=8;
+  marker.style.left=(markerC.minX*zoomScale+panX-pad)+"px";
+  marker.style.top=(markerC.minY*zoomScale+panY-pad)+"px";
+  marker.style.width=((markerC.maxX-markerC.minX+1)*zoomScale+pad*2)+"px";
+  marker.style.height=((markerC.maxY-markerC.minY+1)*zoomScale+pad*2)+"px";
 }
 
 // === Dilation (thickness) ===
@@ -349,6 +452,7 @@ function renderOutput(s){
 function applyZoom(){
   outCanvas.style.transform="translate("+panX+"px,"+panY+"px) scale("+zoomScale+")";
   zoomSpan.textContent=Math.round(zoomScale*100)+"%";
+  if(markerC) positionMarker();
 }
 function zoomFit(){
   if(!imgW||!imgH) return;
@@ -484,6 +588,7 @@ function dlAs(mode){
 // === Reset ===
 resetBtn.addEventListener("click",function(){
   setPicking(false);
+  suspects=[];suspectsEl.innerHTML="";suspectsEl.classList.add("hidden");hideMarker();
   srcData=null;rawMask=null;dilatedMask=null;imgW=0;imgH=0;
   viewerLayout.classList.add("hidden");
   imageInfo.classList.add("hidden");imageInfo.innerHTML="";
